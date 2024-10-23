@@ -1,0 +1,15 @@
+<launch>
+
+<node name="rviz" pkg="rviz" type="rviz" args="-d $(find planner)/cfg/2D_map.rviz"/>
+
+
+<node pkg="planner" name="global_searcher" type="global_searcher_node" required = "true" launch-prefix="xterm -e gdb -ex run --args " >
+    <rosparam file="$(find global_searcher)/cfg/global_searcher.yaml" command = "load" />
+</node>
+
+<node pkg="planner" name="waypoint_generator" type="waypoint_generator_node" output="screen">
+    <remap from="~goal" to="/goal"/>
+    <param name="waypoint_type" value="manual-lonely-waypoint"/>    
+</node>
+
+</launch>

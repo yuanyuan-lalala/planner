@@ -1,0 +1,11 @@
+<launch>
+
+<node name="rviz" pkg="rviz" type="rviz" args="-d $(find planner)/cfg/2D_map.rviz"/>
+
+
+<node pkg="planner" name="waypoint_generator" type="waypoint_generator_node" output="screen">
+    <remap from="~goal" to="/goal"/>
+    <param name="waypoint_type" value="manual-lonely-waypoint"/>    
+</node>
+
+</launch>

@@ -1,0 +1,121 @@
+map:
+  # 地图的pcd文件地址（真实环境）
+  file_path: /home/hitcrt/sentry_ws/src/sentry_planning/global_searcher/map/map.pcd
+  occ_file_path: /home/zzt/HITCRT/sentry_v1.0/src/sentry_planning/global_searcher/map/occfinal.png
+  bev_file_path: /home/zzt/HITCRT/sentry_v1.0/src/sentry_planning/global_searcher/map/bevfinal.png
+  distance_file_path: /home/zzt/HITCRT/sentry_v1.0/src/sentry_planning/global_searcher/map/distance.png
+  # 地图的pcd文件地址（仿真环境）
+  # file_path: /home/yang/sentry_ws/src/sentry_gazebo_2023/location_and_mapping/FAST_LIO/PCD/scans_fast.pcd
+
+  # 地图分辨率
+  resolution: 0.1
+  # 地图三维尺寸（真实环境）
+  x_size: 30
+  y_size: 18
+  z_size: 1.5
+  # 地图三维尺寸（仿真环境）
+  # x_size: 28
+  # y_size: 15
+  # z_size: 2.4
+search:
+  # 规划的起点(真实环境)
+  start_point_x: 0.88
+  start_point_y: 2.21
+  start_point_z: 0.0
+
+  map_offset_x: 1.93
+  map_offset_y: 0.0
+  map_offset_z: 0.0
+
+  # 规划的起点(仿真环境)
+  # start_point_x: 6
+  # start_point_y: 7.5
+  # start_point_z: 0.0
+  # 地图左下角（真实环境）
+  map_low_point_x: 0
+  map_low_point_y: 0
+  map_low_point_z: 0
+  # 地图左下角（仿真环境）
+  #  map_low_point_x: 0
+  #  map_low_point_y: 0
+  #  map_low_point_z: 0
+  # 机器人碰撞检测半径
+  robot_radius: 0.35 # 车850mm
+  robot_radius_dash: 0.15
+  # 二维规划应用的高度（真实环境）
+  _2d_search_height_low: -0.5
+  _2d_search_height_high: 0.5
+  # 二维规划应用的高度（仿真环境）
+  # _2d_search_height_low: 0.3
+  # _2d_search_height_high: 1
+  # 地图障碍物膨胀标志位
+  obstacle_swell_flag: true
+  # 地图障碍物膨胀可视化标志位
+  obstacle_swell_vis_flag: true
+
+trajectory:
+  # 障碍物点云的捕捉范围
+  search_height_min: -1.2
+  search_height_max: 1.2
+  search_radius: 4.0
+
+heuristic:
+  USING_MANHATTAN: 1
+  USING_EUCLIDEAN: 0
+  USING_DIJKSTRA: 0
+
+debug:
+  visual: true
+  log: 1
+
+game:
+  red: true
+
+#map:
+#  # 地图的pcd文件地址
+#  file_path: /home/hitcrt/HITCRT/sentry2023/src/sentry_planning/global_searcher/map/RM01160129.pcd
+#  occ_file_path: /home/hitcrt/HITCRT/rm2023_sentry_utils/src/occ.png
+#  bev_file_path: /home/hitcrt/HITCRT/rm2023_sentry_utils/src/bev1.png
+#
+#  # 地图分辨率
+#  resolution: 0.1
+#  # 地图三维尺寸
+#  x_size: 28
+#  y_size: 15
+#  z_size: 2.4
+#
+#search:
+#  # 规划的起点
+#  start_point_x: 3.0
+#  start_point_y: 7.0
+#  start_point_z: 0.0
+#  # 机器人碰撞检测半径
+#  robot_radius: 0.3 # 车850mm
+#  # 二维规划应用的高度
+#  _2d_search_height_low: 0.1
+#  _2d_search_height_high: 1
+#  # 地图障碍物膨胀标志位
+#  obstacle_swell_flag: true
+#  # 地图障碍物膨胀可视化标志位
+#  obstacle_swell_vis_flag: true
+#
+#  map_low_point_x: 0
+#  map_low_point_y: 0
+#  map_low_point_z: 0
+#
+#  map_offset_x: 1.93
+#  map_offset_y: 0.0
+#  map_offset_z: 0.0
+#
+#trajectory:
+#  # 障碍物点云的捕捉范围
+#  search_height_min: 0.1
+#  search_height_max: 1.0
+#  search_radius: 4.0
+#
+#debug:
+#  visual: 1
+#  log: 1
+#
+#game:
+#  red: true

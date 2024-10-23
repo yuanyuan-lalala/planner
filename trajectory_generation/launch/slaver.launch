@@ -1,0 +1,17 @@
+<launch>
+<node pkg="planner" name="slaver" type="slaver_node" required = "true" output="screen">
+    <!-- <rosparam file="$(find slaver)/cfg/slaver.yaml" command = "load" /> -->
+</node>
+
+<arg name="record" default="true" />
+<group if="$(arg record)">
+    <node pkg="rosbag" type="record" name="sentry_record" args="/odometry
+    /sentry_des_speed
+    /sentry_perception/attack /objects 
+    /slaver/robot_command /slaver/UWB_location /slaver/wheel_state
+    /odometry_imu
+    /slaver/buff_status /slaver/damage_feedback /slaver/robot_HP /slaver/robot_RFID /slaver/user_interaction
+    /slaver/robot_status -o /home/amov/sentry_ws/sentry.bag"/>
+</group>
+
+</launch>
