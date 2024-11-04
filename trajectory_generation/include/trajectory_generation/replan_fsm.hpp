@@ -1,27 +1,23 @@
-#ifndef REPLAN_H
-#define REPLAN_H
+#pragma once
 #include"memory"
 #include"ros/ros.h"
 #include"planner_manager.hpp"
-#include"visualization.hpp"
+#include "map/global_map.hpp"
+#include"visualizer/visualization.hpp"
 #include <nav_msgs/Odometry.h>
 #include "nav_msgs/Path.h"
-
 #include <gazebo_msgs/ModelStates.h>
 #include "std_msgs/Bool.h"
 #include"std_msgs/Int64.h"
-
 #include <sentry_msgs/object.h>
 #include <sentry_msgs/objects.h>
 #include <sentry_msgs/RobotsHP.h>
 #include <sentry_msgs/RobotCommand.h>
 #include <sentry_msgs/RobotStatus.h>
 #include <sentry_msgs/GoTarget.h>
-
 #include "planner/trajectoryPoly.h"
 
-#include"Astar_searcher.hpp"
-#include"path_smooth.hpp"
+
 
 class ReplanFSM{
     public:
@@ -51,21 +47,13 @@ class ReplanFSM{
     targetType sentryTargetType;
     planningType sentryPlanningType;
 
-//    typedef enum {
-//         RED = 0,
-//         BLUE,
-//     } teamColor;
-//     teamColor sentryColor;
 
-    typedef enum {
-        red = 0,
-        blue,
-    } teamColor;
+    // enum class teamColor{
+    //     RED,
+    //     BLUE,
+    // };
     teamColor sentryColor;
     
-
-    
-
 
     void init(ros::NodeHandle &nh);
 
@@ -95,6 +83,7 @@ class ReplanFSM{
 
     std::unique_ptr<PlannerManager> plannerManager;
     std::unique_ptr<Visualization> visualization;
+    std::shared_ptr<GlobalMap> m_global_map;
 
     double robot_radius;
     double robot_radius_dash;
@@ -132,10 +121,6 @@ class ReplanFSM{
     ros::ServiceServer go_target_server;
     
 
-
-
-    
-
     inline double distance(Eigen::Vector3d target_pt, Eigen::Vector3d last_target_pt)
     {
         double dis = sqrt(pow(target_pt.x() - last_target_pt.x(), 2) + pow(target_pt.y() - last_target_pt.y(), 2));
@@ -152,9 +137,3 @@ class ReplanFSM{
 
 
 };
-
-
-
-
-
-#endif

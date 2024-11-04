@@ -1,8 +1,7 @@
 <launch>
 
   <node name="rviz" pkg="rviz" type="rviz" args="-d $(find planner)/cfg/2D_map.rviz"/>
-
-  <node pkg="planner" name="trajectory_generation" type="trajectory_generation_node" output="screen">
+  <node pkg="planner" name="trajectory_generation" type="trajectory_generation_node" output="screen" launch-prefix="gdb -ex run --args">
     <param name="trajectory_generator/map_x_size" value="28.0"/>
     <param name="trajectory_generator/map_y_size" value="15.2"/>  <!-- 仿真环境参数-->
     <!-- <param name="trajectory_generator/map_y_size" value="30.0"/> -->

@@ -11,11 +11,15 @@ int main(int argc,char** argv){
     ros::NodeHandle nh("~");
 
     ReplanFSM roboReplan;
+    
     roboReplan.init(nh);
 
     ros::Duration(4.0).sleep();
+    
     ROS_WARN("start planning");
-    roboReplan.plannerManager->m_astar_path_finder->visGridMap();
+    
+    roboReplan.visualization->visGridMap();
+    
 
     ros::spin();
 

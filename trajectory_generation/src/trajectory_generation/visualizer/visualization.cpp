@@ -1,8 +1,8 @@
-#include "visualization.hpp"
+#include "visualizer/visualization.hpp"
 
 
 
-void Visualization::init(ros::NodeHandle &nh)
+void Visualization::init(ros::NodeHandle &nh,std::shared_ptr<GlobalMap> global_map)
 {
     astar_path_vis_pub = nh.advertise<visualization_msgs::Marker>("astar_path_vis", 1);
     final_path_vis_pub = nh.advertise<visualization_msgs::Marker>("final_path_vis_pub", 1);
@@ -18,6 +18,13 @@ void Visualization::init(ros::NodeHandle &nh)
     topo_path_point_vis_pub = nh.advertise<visualization_msgs::Marker>("topo_point", 1);
     topo_path_vis_pub = nh.advertise<visualization_msgs::Marker>("topo_point_path", 1);
     attack_target_vis_pub = nh.advertise<visualization_msgs::Marker>("attack_target", 1);
+    m_global_map = global_map;
+
+    grid_map_vis_pub = nh.advertise<sensor_msgs::PointCloud2>("grid_map_vis", 1);
+    local_grid_map_vis_pub = nh.advertise<sensor_msgs::PointCloud2>("local_grid_map_vis", 1);
+    ROS_INFO("Publisher initialized: %s", grid_map_vis_pub ? "Yes" : "No");
+
+
 }
 
 /**
@@ -486,8 +493,7 @@ void Visualization::visTopoPointGuard(std::vector<GraphNode::Ptr> global_graph)
         }
     }
     topo_position_guard_vis_pub.publish(node_vis);
-//    topo_line_vis_pub.publish(line_strip);
-//    topo_path_vis_pub.publish(line_strip2);
+
 }
  
 void Visualization::visTopoPointConnection(std::vector<GraphNode::Ptr> global_graph)
@@ -593,6 +599,117 @@ void Visualization::visTopoPointConnection(std::vector<GraphNode::Ptr> global_gr
     }
     topo_position_connection_vis_pub.publish(node_vis);
     topo_line_vis_pub.publish(line_strip);
-//    topo_path_vis_pub.publish(line_strip2);
 }
 
+
+void Visualization::visLocalGridMap(const pcl::PointCloud <pcl::PointXYZ> &cloud, const bool swell_flag) {
+    pcl::PointCloud <pcl::PointXYZ> cloud_vis;
+    sensor_msgs::PointCloud2 map_vis;
+    pcl::PointXYZ pt;
+    //如果不膨胀
+    if (!swell_flag) {
+        for (int idx = 0; idx < (int) cloud.points.size(); idx++) {
+            pt = cloud.points[idx];
+            //转化成栅格中心的点云坐标
+            Eigen::Vector3d cor_round = m_global_map->coordRounding(Eigen::Vector3d(pt.x, pt.y, pt.z));
+            pt.x = cor_round(0);
+            pt.y = cor_round(1);
+            pt.z = cor_round(2);
+            cloud_vis.points.push_back(pt);
+        }
+    } else {
+        for (int i = 0; i < m_global_map->GLX_SIZE; i++) {
+            for (int j = 0; j < m_global_map->GLY_SIZE; j++) {
+                for (int k = 0; k < m_global_map->GLZ_SIZE; k++) {
+                    Eigen::Vector3i temp_grid(i, j, k);
+                    //查看是否被占据
+                    if (m_global_map->isLocalOccupied(temp_grid)) {
+                        Eigen::Vector3d temp_pt = m_global_map->gridIndex2coord(temp_grid);
+                        pt.x = temp_pt(0);
+                        pt.y = temp_pt(1);
+                        pt.z = m_global_map->getHeight(i, j) * 1;;
+                        cloud_vis.points.push_back(pt);
+                    }
+                }
+            }
+        }
+    }
+
+    /* 设置点云的规则（无序、坐标值有限） */
+    cloud_vis.width = cloud_vis.points.size();
+    cloud_vis.height = 1;
+    cloud_vis.is_dense = true;
+//    ROS_WARN("local point size is  %d ", (int)cloud_vis.points.size());
+    /* 将障碍物的PCL点云数据类型转换为ROS点云通信数据类型*/
+    pcl::toROSMsg(cloud_vis, map_vis);
+    /* 设置坐标系的名称 */
+    map_vis.header.frame_id = "world";
+    /* 发布障碍物点云到rviz中 */
+    std::cout<<"before publish local!!!"<<std::endl;
+    local_grid_map_vis_pub.publish(map_vis);
+    std::cout<<"after published local!!!"<<std::endl;
+
+}
+
+
+/**
+ * @brief	用点云坐标生成栅格中心点坐标（相当于降采样）后发给rviz以显示出来
+ *          （二维规划下只取指定高度范围的点云）
+ * @param
+ */
+void Visualization::visGridMap() {
+//    ROS_WARN("start publish GridMap");
+    pcl::PointCloud <pcl::PointXYZRGB> cloud_vis;
+    sensor_msgs::PointCloud2 map_vis;
+    pcl::PointXYZRGB pt;
+
+    for (int i = 0; i < m_global_map->GLX_SIZE; i++) {
+        for (int j = 0; j < m_global_map->GLY_SIZE; j++) {
+            for (int k = 0; k < m_global_map->GLZ_SIZE; k++) {
+                Eigen::Vector3i temp_grid(i, j, 0);
+                if (m_global_map->isOccupied(temp_grid, false))
+                {
+                    Eigen::Vector3d temp_pt = m_global_map->gridIndex2coord(temp_grid);
+                    pt.x = temp_pt(0);
+                    pt.y = temp_pt(1);
+                    pt.z = 0.0;
+                    pt.r = 255.0;
+                    pt.g = 255.0;
+                    pt.b = 255.0;
+                    cloud_vis.points.push_back(pt);
+                }
+                
+                if((*m_global_map->GridNodeMap)[i][j]->m_visibility > 0.1)
+                {
+                    Eigen::Vector3d temp_pt = m_global_map->gridIndex2coord(temp_grid);
+                    pt.x = temp_pt(0);
+                    pt.y = temp_pt(1);
+                    pt.z = 0.0;
+                    pt.r = 255 - (*m_global_map->GridNodeMap)[i][j]->m_visibility * 12.0;
+                    pt.g = 0.0;
+                    pt.b = (*m_global_map->GridNodeMap)[i][j]->m_visibility * 12.0;
+                    cloud_vis.points.push_back(pt);
+                }
+            }
+        }
+    }
+
+    /* 将障碍物的PCL点云数据类型转换为ROS点云通信数据类型*/
+    pcl::toROSMsg(cloud_vis, map_vis);
+    /* 设置坐标系的名称 */
+    map_vis.header.frame_id = "world";
+    if (!grid_map_vis_pub) {
+    ROS_ERROR("grid_map_vis_pub is not initialized!");
+    return;
+}
+    /* 发布障碍物点云到rviz中 */
+    std::cout<<"global published before!!!"<<std::endl;
+    grid_map_vis_pub.publish(map_vis);
+    std::cout<<"global published after!!!"<<std::endl;
+    int temp = 1;
+    while (temp--) {
+        pcl::toROSMsg(cloud_vis, map_vis);
+        map_vis.header.frame_id = "world";
+        grid_map_vis_pub.publish(map_vis);
+    }
+}

@@ -1,26 +1,32 @@
-#include "topo_searcher.hpp"
+#include "searcher/topo_searcher.hpp"
 
-void TopoSearcher::init(ros::NodeHandle &nh, std::shared_ptr<GlobalMap> &global_map)
+TopoSearch::TopoSearch(std::shared_ptr<GlobalMap> global_map):SearchAlgorithm(global_map){
+
+}
+
+
+void TopoSearch::init()
 {
     m_graph.clear();
     m_eng = std::default_random_engine(m_rd());
     m_rand_pos = std::uniform_real_distribution<double>(0.0, 1.0);
     max_sample_num = 1000;
-
     m_sample_inflate(0) = 2.0;//这意味着采样区域在 x 方向上扩展了两倍。
     m_sample_inflate(1) = 7.0;//采样区域在 y 方向上扩展了七倍
-
-    global_map_ = global_map;
 }
 
-void TopoSearcher::createGraph(Eigen::Vector3d start, Eigen::Vector3d end)
+
+std::vector<Eigen::Vector3d> TopoSearch::getPath(){
+    return m_min_path;
+}
+
+bool TopoSearch::search(Eigen::Vector3d start, Eigen::Vector3d end)
 {
     ros::Time t1, t2;  /// 计算时间
     t1 = ros::Time::now();
-    //    std::vector<GraphNode::Ptr> graph_temp;
-    //    m_graph.swap(graph_temp);
+
     for(int i = 0; i < m_graph.size(); i++)
-    {  /// 注意shared_ptr引用计数问题
+    {  
         m_graph[i]->neighbors.clear();
         m_graph[i]->neighbors_but_noconnected.clear();
     }
@@ -32,11 +38,11 @@ void TopoSearcher::createGraph(Eigen::Vector3d start, Eigen::Vector3d end)
     m_graph.push_back(end_node);
     int node_id = 1;
 
-    for(int i = 0; i < global_map_->topo_keypoint.size(); i++)  // 只对关键点(路口点)进行采样
+    for(int i = 0; i < m_globalMap->topo_keypoint.size(); i++)  // 只对关键点(路口点)进行采样
     {
         double min_distance = 0.0;
         int exist_unvisiual = 0;
-        Eigen::Vector3d pt = global_map_->topo_keypoint[i];
+        Eigen::Vector3d pt = m_globalMap->topo_keypoint[i];
         std::vector<GraphNode::Ptr> visib_guards = findVisibGuard(pt, min_distance, exist_unvisiual);
 
         if(visib_guards.size() < 1) { // 这个采样点是不可见的，所以直接建立守卫点
@@ -60,7 +66,7 @@ void TopoSearcher::createGraph(Eigen::Vector3d start, Eigen::Vector3d end)
         int exist_unvisiual = 0;
         pt = getSample();  /// 返回的采样点
 
-        Eigen::Vector3i pt_idx = global_map_->coord2gridIndex(pt);
+        Eigen::Vector3i pt_idx = m_globalMap->coord2gridIndex(pt);
 
         ++sample_num;
         std::vector<GraphNode::Ptr> visib_guards = findVisibGuard(pt, min_distance, exist_unvisiual);   /// 根据采样点找可见的守卫点
@@ -91,16 +97,17 @@ void TopoSearcher::createGraph(Eigen::Vector3d start, Eigen::Vector3d end)
                 double edge_z = start_z;
 
                 int pt_idx, pt_idy, pt_idz;
-                global_map_->coord2gridIndex(edge_x, edge_y, edge_z, pt_idx, pt_idy, pt_idz);
-                if (global_map_->isOccupied(pt_idx, pt_idy, pt_idz, false)){
+                m_globalMap->coord2gridIndex(edge_x, edge_y, edge_z, pt_idx, pt_idy, pt_idz);
+                if (m_globalMap->isOccupied(pt_idx, pt_idy, pt_idz, false)){
                     obs_num ++;
                 }
             }
 
             if(obs_num >= 10){  // 如果周围的障碍物较多则直接建立守卫点，解决困难样本
                 int idx, idy, idz;
-                global_map_->coord2gridIndex(pt.x(), pt.y(), pt.z(), idx, idy, idz);
-                if(global_map_->GridNodeMap[idx][idy]->exist_second_height_){
+                m_globalMap->coord2gridIndex(pt.x(), pt.y(), pt.z(), idx, idy, idz);
+                
+                if((*m_globalMap->GridNodeMap)[idx][idy]->exist_second_height_){
                     pt.z() = 0.08;
                 }
                 GraphNode::Ptr guard = GraphNode::Ptr (new GraphNode(pt, GraphNode::Guard, ++node_id));
@@ -109,9 +116,7 @@ void TopoSearcher::createGraph(Eigen::Vector3d start, Eigen::Vector3d end)
         }
     }
     t2 = ros::Time::now();
-    std::vector<std::vector<Eigen::Vector3d>> temp;  // 搜索可行路径并进行排序，找到最佳路径
-    temp = searchPaths();
-    //checkDistanceFinalPath();
+    searchPaths();
 
     ROS_DEBUG("[Topo]: dijkstra time: %f", (ros::Time::now() - t2).toSec());
     ROS_DEBUG("[Topo]: topo search time: %f", (ros::Time::now() - t1).toSec());
@@ -119,22 +124,19 @@ void TopoSearcher::createGraph(Eigen::Vector3d start, Eigen::Vector3d end)
 }
 
 
-std::vector<std::vector<Eigen::Vector3d>> TopoSearcher::searchPaths(int node_id)
+void TopoSearch::searchPaths(int node_id)
 {
-    raw_paths.clear();
-//    std::vector<GraphNode::Ptr> visited;
-//    visited.push_back(m_graph[0]);
+    
 //    depthFirstSearch(visited);  // 进行深度优先搜索得到部分可行路径
     DijkstraSearch(node_id);  // 改为dijkstra  默认为1
 
-    return raw_paths;
+    
 }
 
-void TopoSearcher::DijkstraSearch(int node_id){
-    min_path.clear();//最短路径
+void TopoSearch::DijkstraSearch(int node_id){
+    m_min_path.clear();//最短路径
     std::vector<double> minDist(m_graph.size() + 1, 100000.0);//每个节点到原点的距离向量
     std::vector<bool> visited(m_graph.size() + 1, false);//是否访问过
-
     Eigen::Vector3d temp = {0,0,0};
     //每个节点的父节点及其对应位置坐标
     std::vector<std::pair<int, Eigen::Vector3d>> parent (m_graph.size() + 1, std::make_pair(-1, temp));
@@ -188,15 +190,15 @@ void TopoSearcher::DijkstraSearch(int node_id){
         }
         return;
     }
-    min_path.push_back(m_graph[index]->pos);
+    m_min_path.push_back(m_graph[index]->pos);
     while(1){
-        min_path.push_back(parent[index].second);
+        m_min_path.push_back(parent[index].second);
         index = parent[index].first;
         if(index == 0){
             break;
         }
     }
-    std::reverse(min_path.begin(), min_path.end());
+    std::reverse(m_min_path.begin(), m_min_path.end());
 }
 
 /**
@@ -204,18 +206,18 @@ void TopoSearcher::DijkstraSearch(int node_id){
      * @param
      * @return 采样点
 */
-Eigen::Vector3d TopoSearcher::getSample()
+Eigen::Vector3d TopoSearch::getSample()
 {
     Eigen::Vector3d pt;
     if(m_rand_pos(m_eng) < 0.1){  // 10%的概率采样附近的点
         for(int i = 0; i < 4 ; i++){
             int x_i = int(m_rand_pos(m_eng) * 120);//0-120随机数
             int y_i = int(m_rand_pos(m_eng) * 120);
-            pt.x() = global_map_->odom_position.x() + (x_i - 60) * 0.1;//当前位置的 [-6, 6] 米范围内。
-            pt.y() = global_map_->odom_position.y() + (y_i - 60) * 0.1;
-            Eigen::Vector3i pt_idx = global_map_->coord2gridIndex(pt);
-            pt.z() = global_map_->getHeight(pt_idx.x(), pt_idx.y());
-            if(!global_map_->isOccupied(pt_idx, false)) {
+            pt.x() = m_globalMap->odom_position.x() + (x_i - 60) * 0.1;//当前位置的 [-6, 6] 米范围内。
+            pt.y() = m_globalMap->odom_position.y() + (y_i - 60) * 0.1;
+            Eigen::Vector3i pt_idx = m_globalMap->coord2gridIndex(pt);
+            pt.z() = m_globalMap->getHeight(pt_idx.x(), pt_idx.y());
+            if(!m_globalMap->isOccupied(pt_idx, false)) {
                 return pt;
             }
         }
@@ -223,8 +225,8 @@ Eigen::Vector3d TopoSearcher::getSample()
     //90%全图采点
     // 如果没有进入附近点采样的逻辑（即在 90% 的情况下），函数会从全局采样点集合 topo_sample_map 中随机选取一个点。
     // topo_sample_map：这是一个预先定义好的全局采样点列表，包含了地图中已经确定的有效采样点。
-    int index = int(m_rand_pos(m_eng) * global_map_->topo_sample_map.size());
-    pt = global_map_->topo_sample_map[index];
+    int index = int(m_rand_pos(m_eng) * m_globalMap->topo_sample_map.size());
+    pt = m_globalMap->topo_sample_map[index];
     return pt;
 }
 
@@ -234,7 +236,7 @@ Eigen::Vector3d TopoSearcher::getSample()
      * @param pt 采样点
      * @param dis_temp 采样点到最近的守卫点的距离
 */
-std::vector<GraphNode::Ptr> TopoSearcher::findVisibGuard(Eigen::Vector3d pt, double &dis_temp, int &exist_unvisiual){
+std::vector<GraphNode::Ptr> TopoSearch::findVisibGuard(Eigen::Vector3d pt, double &dis_temp, int &exist_unvisiual){
     std::vector<GraphNode::Ptr> visib_guards;
     Eigen::Vector3d pt_temp;
     double temp_x = pt.x();
@@ -280,7 +282,7 @@ std::vector<GraphNode::Ptr> TopoSearcher::findVisibGuard(Eigen::Vector3d pt, dou
     return visib_guards;
 }
 
-void TopoSearcher::checkHeightFeasible(GraphNode::Ptr g1, GraphNode::Ptr g2, Eigen::Vector3d pt, int &node_id)
+void TopoSearch::checkHeightFeasible(GraphNode::Ptr g1, GraphNode::Ptr g2, Eigen::Vector3d pt, int &node_id)
 {   // 检查两个守卫点之间是否可以建立连接点,进行双向与单向链接
     int direction;
 
@@ -318,7 +320,7 @@ void TopoSearcher::checkHeightFeasible(GraphNode::Ptr g1, GraphNode::Ptr g2, Eig
     m_graph.push_back(connector);
 }
 
-bool TopoSearcher::heightFeasible(const Eigen::Vector3d& p1, const Eigen::Vector3d& p2, int &direction, double step, double thresh)
+bool TopoSearch::heightFeasible(const Eigen::Vector3d& p1, const Eigen::Vector3d& p2, int &direction, double step, double thresh)
 {
     /**
      * @brief 判断两点之间是否高度可通行
@@ -343,13 +345,13 @@ bool TopoSearcher::heightFeasible(const Eigen::Vector3d& p1, const Eigen::Vector
     int n = std::sqrt(pow(x_offset, 2) + pow(y_offset, 2)) / step;
     int idx, idy, idz, idx_end, idy_end, idz_end;
     
-    global_map_->coord2gridIndex(p2_x, p2_y, p2_z, idx, idy, idz);//起点
-    global_map_->coord2gridIndex(p1_x, p1_y, p1_z, idx_end, idy_end, idz_end);//终点
+    m_globalMap->coord2gridIndex(p2_x, p2_y, p2_z, idx, idy, idz);//起点
+    m_globalMap->coord2gridIndex(p1_x, p1_y, p1_z, idx_end, idy_end, idz_end);//终点
     
     double last_height = p2_z;  ///起点高度
     // 如果两个点都在桥洞区域且高度差很多，说明一个在桥下一个在桥上，直接寄
-    if(global_map_->GridNodeMap[idx][idy]->exist_second_height_ &&
-        global_map_->GridNodeMap[idx_end][idy_end]->exist_second_height_){
+    if((*m_globalMap->GridNodeMap)[idx][idy]->exist_second_height_ &&
+        (*m_globalMap->GridNodeMap)[idx_end][idy_end]->exist_second_height_){
         //高度差过大
         if(abs(p1.z() - p2.z()) > 0.3){
             direction = 0;
@@ -363,14 +365,14 @@ bool TopoSearcher::heightFeasible(const Eigen::Vector3d& p1, const Eigen::Vector
         ray_ptz = 0.0;
 
         int pt_idx, pt_idy, pt_idz;
-        global_map_->coord2gridIndex(ray_ptx, ray_pty, ray_ptz, pt_idx, pt_idy, pt_idz);
+        m_globalMap->coord2gridIndex(ray_ptx, ray_pty, ray_ptz, pt_idx, pt_idy, pt_idz);
         double height;
         //不存在第二高度，没有桥洞
-        if(!global_map_->GridNodeMap[pt_idx][pt_idy]->exist_second_height_) {
-            height = global_map_->getHeight(pt_idx, pt_idy);  //非桥洞区域正常通行
+        if(!(*m_globalMap->GridNodeMap)[pt_idx][pt_idy]->exist_second_height_) {
+            height = m_globalMap->getHeight(pt_idx, pt_idy);  //非桥洞区域正常通行
         }else{  // 进入桥洞区域后的高度不再根据bev更新，而是直接等于上一个点的高度。
             height = last_height;
-            if(global_map_->GridNodeMap[idx_end][idy_end]->exist_second_height_){
+            if((*m_globalMap->GridNodeMap)[idx_end][idy_end]->exist_second_height_){
                 last_height = p1_z;
             }
         }
@@ -391,8 +393,174 @@ bool TopoSearcher::heightFeasible(const Eigen::Vector3d& p1, const Eigen::Vector
     }
     return true;
 }
+
+  /**
+     * @brief 判断两个点是否需要连接，即为两个点不管是单向可连或者双线可连，只要之前相互可见过就不再重新连接
+     * @param g1 g2 两个判断的守卫点
+     */
+bool TopoSearch::needConnection(GraphNode::Ptr g1, GraphNode::Ptr g2, Eigen::Vector3d pt){
+
+    for(int i = 0; i < g1->neighbors.size(); i++){
+        for(int j = 0; j < g2->neighbors.size(); j++){
+            if(g1->neighbors[i]->m_id == g2->neighbors[j]->m_id)  // 只要这俩连接过，我们就认为这段路径就不会重连接了
+            {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+
+std::vector<Eigen::Vector3d> TopoSearch::smoothTopoPath(std::vector<Eigen::Vector3d> topo_path)
+{
+    if(topo_path.size() < 2)
+    {
+        return topo_path;
+    }
+    Eigen::Vector3d tail_pos, colli_pt;
+    std::vector<Eigen::Vector3d> smooth_path;
+    Eigen::Vector3d head_pos = topo_path[0];//头位置
+    smooth_path.push_back(head_pos);
+    int iter_idx = 0;
+    bool collision = true;                        
+    double last_height = head_pos.z();  // 初始化高度为起点高度，防止起点在桥洞区域
+    int iter_count = 0;
+
+    while(collision)  // 如果迭代到最后一个点不出现碰撞，则认为可以直接把当前点连接到终点，整体优化完毕
+    {
+        //迭代1000次以上还是没有成功生成轨迹
+        iter_count++;
+        if(iter_count > 1000){
+            ROS_WARN("[A Star ERROR] -------- generated trajectory is not safe! --------");
+            break;
+        }
+
+        collision = false;
+        Eigen::Vector3d temp;
+        for(int i = iter_idx; i < topo_path.size() - 1; i++)  // 找topo路径的每一段
+        {
+            //
+            last_height = topo_path[i].z();
+            double x_offset = topo_path[i + 1].x() - topo_path[i].x();
+            double y_offset = topo_path[i + 1].y() - topo_path[i].y();
+            double distance = std::sqrt(std::pow(x_offset, 2) + std::pow(y_offset, 2));
+
+            int n = std::sqrt(std::pow(x_offset, 2) + std::pow(y_offset, 2)) / 0.05;  // 在每一段采样 分成几段
+            
+            for (int j = 1; j <= n; j++)
+            {
+                bool second_height = false;
+                tail_pos.x() = topo_path[i].x() + j * 0.05 * x_offset / distance;
+                tail_pos.y() = topo_path[i].y() + j * 0.05 * y_offset / distance;
+                Eigen::Vector3i temp_id = m_globalMap->coord2gridIndex(tail_pos);
+                
+                tail_pos.z() = (*m_globalMap->GridNodeMap)[temp_id.x()][temp_id.y()]->m_height;
+                last_height = tail_pos.z();
+                
+
+                if(m_globalMap->isOccupied(temp_id.x(), temp_id.y(), temp_id.z(), second_height)){
+                    continue;  // TODO 暂时处理为不考虑这种情况
+                }
+                //如果不可见并且显示没有障碍物 头不变但是尾是在不断遍历的
+                if (!lineVisib(tail_pos, head_pos, colli_pt, 0.05) && !collision){  // 记录最近的可见点的第一个不可见点，这样如果中间又有可见的点是就可以把collision改成true
+                    collision = true;//更改为有障碍物
+                    Eigen::Vector3i temp_id = m_globalMap->coord2gridIndex(tail_pos);
+                    temp = tail_pos;
+                    //找每一段起始点附近的能够直接到终点的路径，没有就返回false
+                    bool easy = getNearPoint(temp, head_pos, temp);
+                    //传参真的没反吗？？？
+                    iter_idx = i;
+                }
+                else if (lineVisib(tail_pos, head_pos, colli_pt, 0.05)){
+                    // 这里的意思是，只要可见，就不用再检查了，直接连。即为连接可见的topo点
+                    collision = false;
+                }
+            }
+        }
+        //有碰撞
+        if(collision){
+            head_pos = temp;
+            smooth_path.push_back(temp);
+        }else{
+            smooth_path.push_back(topo_path.back());
+            break;
+        }
+
+    }
+    if(iter_count > 1000){
+        return topo_path;
+    }
+    return smooth_path;
+}
+
+
+bool TopoSearch::lineVisib(const Eigen::Vector3d& p1, const Eigen::Vector3d& p2, Eigen::Vector3d& colli_pt, double thresh)
+{
+    double ray_ptx, ray_pty, ray_ptz;
+    double p2_x, p2_y, p2_z, p1_x, p1_y, p1_z;
+    double distance_thresh;
+    p2_x = p2.x();
+    p2_y = p2.y();
+    p2_z = p2.z();
+    p1_x = p1.x();
+    p1_y = p1.y();
+    p1_z = p1.z();
+
+    double x_offset = p1.x() - p2.x();
+    double y_offset = p1.y() - p2.y();
+    double z_offset = p1.z() - p2.z();
+
+    double distance = std::sqrt(pow(x_offset, 2) + pow(y_offset, 2));
+    int n = int(double(std::sqrt(pow(x_offset, 2) + pow(y_offset, 2))) / double(thresh));
+    
+    int idx, idy, idz, idx_end, idy_end, idz_end;
+    m_globalMap->coord2gridIndex(p2_x, p2_y, p2_z, idx, idy, idz);
+    m_globalMap->coord2gridIndex(p1_x, p1_y, p1_z, idx_end, idy_end, idz_end);
+    double last_height = p2_z;  ///起点高度
+
+    for(int i = 0; i < n+1; i++)
+    {
+        if(i == n){
+            ray_ptx = p1_x;
+            ray_pty = p1_y;
+            ray_ptz = p1_z;
+        }else {
+            ray_ptx = p2_x + i * thresh * x_offset / distance;
+            ray_pty = p2_y + i * thresh * y_offset / distance;
+            ray_ptz = 0.0;
+        }
+
+        
+        int pt_idx, pt_idy, pt_idz;
+        m_globalMap->coord2gridIndex(ray_ptx, ray_pty, ray_ptz, pt_idx, pt_idy, pt_idz);
+        double height;
+        bool second_height = false;
+        height = m_globalMap->getHeight(pt_idx, pt_idy);  //非桥洞区域正常通行
+    
+        if (m_globalMap->isOccupied(pt_idx, pt_idy, pt_idz, second_height)){
+            Eigen::Vector3i temp_idx = {pt_idx, pt_idy, pt_idz};
+            colli_pt = m_globalMap->gridIndex2coord(temp_idx);
+            return false;
+        }
+        else if (height - last_height >= 0.12)
+        {
+            Eigen::Vector3i temp_idx = {pt_idx, pt_idy, pt_idz};
+            colli_pt = m_globalMap->gridIndex2coord(temp_idx);
+            return false;
+        }
+        else if (height - last_height <= -0.3)
+        {
+            Eigen::Vector3i temp_idx = {pt_idx, pt_idy, pt_idz};
+            colli_pt = m_globalMap->gridIndex2coord(temp_idx);
+            return false;
+        }
+        last_height = height;
+    }
+    return true;
+}
 //查看连线是否可通行
-bool TopoSearcher::lineVisib(const Eigen::Vector3d& p1, const Eigen::Vector3d& p2, double thresh, Eigen::Vector3d& pc, int caster_id)
+bool TopoSearch::lineVisib(const Eigen::Vector3d& p1, const Eigen::Vector3d& p2, double thresh, Eigen::Vector3d& pc, int caster_id)
 {
     double ray_ptx, ray_pty, ray_ptz;
     double p2_x, p2_y, p2_z;
@@ -426,9 +594,9 @@ bool TopoSearcher::lineVisib(const Eigen::Vector3d& p1, const Eigen::Vector3d& p
         int pt_idx, pt_idy, pt_idz;
         bool second_height = false;
 
-        global_map_->coord2gridIndex(ray_ptx, ray_pty, ray_ptz, pt_idx, pt_idy, pt_idz);
-        double height = global_map_->getHeight(pt_idx, pt_idy);
-        if(global_map_->GridNodeMap[pt_idx][pt_idy]->exist_second_height_){
+        m_globalMap->coord2gridIndex(ray_ptx, ray_pty, ray_ptz, pt_idx, pt_idy, pt_idz);
+        double height = m_globalMap->getHeight(pt_idx, pt_idy);
+        if((*m_globalMap->GridNodeMap)[pt_idx][pt_idy]->exist_second_height_){
             height = last_height;
             if(height < 0.4){
                 second_height = true;  // 在桥洞区域我们要判断这个点是不是在第二高度上
@@ -439,57 +607,49 @@ bool TopoSearcher::lineVisib(const Eigen::Vector3d& p1, const Eigen::Vector3d& p
             return false;
         }
 
-        if (global_map_->isOccupied(pt_idx, pt_idy, pt_idz, second_height)){
+        if (m_globalMap->isOccupied(pt_idx, pt_idy, pt_idz, second_height)){
             return false;
         }
         last_height = height;
     }
     return true;
 }
-  /**
-     * @brief 判断两个点是否需要连接，即为两个点不管是单向可连或者双线可连，只要之前相互可见过就不再重新连接
-     * @param g1 g2 两个判断的守卫点
-     */
-bool TopoSearcher::needConnection(GraphNode::Ptr g1, GraphNode::Ptr g2, Eigen::Vector3d pt){
 
-    for(int i = 0; i < g1->neighbors.size(); i++){
-        for(int j = 0; j < g2->neighbors.size(); j++){
-            if(g1->neighbors[i]->m_id == g2->neighbors[j]->m_id)  // 只要这俩连接过，我们就认为这段路径就不会重连接了
-            {
-                return false;
-            }
+bool TopoSearch::getNearPoint(Eigen::Vector3d headPos, Eigen::Vector3d tailPos, Eigen::Vector3d &best_point)
+{
+    double check_distance = 0.3;//初始检查距离为0.3m
+    while(check_distance >= 0.1)
+    {
+        double delta_x = headPos.x() - tailPos.x();
+        double delta_y = headPos.y() - tailPos.y();
+        Eigen::Vector3d collision_pt;
+        Eigen::Vector3d headPos_left, headPos_right;
+        //左上
+        headPos_left.x() = headPos.x() + check_distance * delta_y / (sqrt(pow(delta_y, 2) + pow(delta_x, 2)));
+        headPos_left.y() = headPos.y() - check_distance * delta_x / (sqrt(pow(delta_y, 2) + pow(delta_x, 2)));
+        headPos_left.z() = headPos.z();
+        //右下
+        headPos_right.x() = headPos.x() - check_distance * delta_y / (sqrt(pow(delta_y, 2) + pow(delta_x, 2)));
+        headPos_right.y() = headPos.y() + check_distance * delta_x / (sqrt(pow(delta_y, 2) + pow(delta_x, 2)));
+        headPos_right.z() = headPos.z();
+
+        // Vector3i tempID_left = coord2gridIndex(headPos_left);
+        // Vector3i tempID_right = coord2gridIndex(headPos_right);
+
+        // int check_swell = (check_distance / 0.1) -1;
+        if (lineVisib(tailPos, headPos_left, collision_pt, 0.1))
+        {
+            best_point = headPos_left;
+            return true;
+        }else if (lineVisib(tailPos, headPos_right, collision_pt, 0.1)){
+            best_point = headPos_right;
+            return true;
+        }else{
+            best_point = headPos;
         }
+
+        check_distance -= 0.1;
     }
 
-//    for(int i = 0; i < g1->neighbors_but_noconnected.size(); i++){
-//        for(int j = 0; j < g2->neighbors_but_noconnected.size(); j++){
-//            if(g1->neighbors_but_noconnected[i]->m_id == g2->neighbors_but_noconnected[j]->m_id)
-//                // 只要这俩相邻过，我们就认为这段路径就不会重连接了
-//            {
-//                return false;
-//            }
-//        }
-//    }
-//
-//    for(int i = 0; i < g1->neighbors.size(); i++){
-//        for(int j = 0; j < g2->neighbors_but_noconnected.size(); j++){
-//            if(g1->neighbors[i]->m_id == g2->neighbors_but_noconnected[j]->m_id)  // 只要这俩相邻连接过，我们就认为这段路径就不会重连接了
-//            {
-//                return false;
-//            }
-//        }
-//    }
-//
-//    for(int i = 0; i < g1->neighbors_but_noconnected.size(); i++){
-//        for(int j = 0; j < g2->neighbors.size(); j++){
-//            if(g1->neighbors_but_noconnected[i]->m_id == g2->neighbors[j]->m_id)  // 只要这俩**过，我们就认为这段路径就不会重连接了
-//            {
-//                return false;
-//            }
-//        }
-//    }
-
-    return true;
+    return false;
 }
-
-

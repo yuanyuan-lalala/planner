@@ -1,9 +1,8 @@
 #pragma once
-
 #include <Eigen/Geometry>
 #include <ros/ros.h>
 #include <ros/console.h>
-#include "global_map.hpp"
+#include "map/global_map.hpp"
 
 // 求解带状线性方程组Ax=b
 // A 是一个 N*N 的带状矩阵 lower band为lowerBw upper band为upperBw.
@@ -141,40 +140,38 @@ public:
 };
 
 
-class ReferenceSmooth {
+class ReferenceOptimizer {
 public:
-    ReferenceSmooth() {};
+    ReferenceOptimizer() {};
 
-    ~ReferenceSmooth();
+    ~ReferenceOptimizer();
 
     std::vector<double> m_trapezoidal_time;
-    std::vector<Eigen::Vector3d> reference_path;
-    std::vector<Eigen::Vector3d> reference_velocity;
+    std::vector<Eigen::Vector3d> m_reference_path;
+    std::vector<Eigen::Vector3d> m_reference_velocity;
     Eigen::MatrixXd m_polyMatrix_x;
     Eigen::MatrixXd m_polyMatrix_y;
     BandedSystem m_bandedMatrix;
     Eigen::MatrixXd b;
     Eigen::MatrixXd b2;
-    Eigen::Vector3d state_vel;
+    Eigen::Vector3d m_state_vel;
 
 
-    double max_accleration = 6.4;
-    double max_velocity = 4.0;
-    double desire_veloity = 3.6;  /// 这里的期望速度和加速度可以控制实际运动的快慢
-    double dt = 0.05;
-    double traj_length = 0.0;
+    double m_max_acceleration = 6.4;
+    double m_max_velocity = 4.0;
+    double m_desire_velocity = 3.6;  /// 这里的期望速度和加速度可以控制实际运动的快慢
+    double m_dt = 0.05;
+    double m_traj_length = 0.0;
 
-    double slope_coeff = 1.8;  /// TODO 这里是针对时间分配时各种地形的处理，这个参数建议移到参数表里
-    double slope_coeff_spinning = 1.4;
-    double slope_coeff_max = 1.0;
-    double slope_coeff_spinning_max = 0.6;
+    double m_slope_coeff = 1.8;  /// TODO 这里是针对时间分配时各种地形的处理，这个参数建议移到参数表里
+    double m_slope_coeff_spinning = 1.4;
+    double m_slope_coeff_max = 1.0;
+    double m_slope_coeff_spinning_max = 0.6;
 
-    double bridge_coeff = 1.8;
-    double bridge_coeff_spinning = 1.6;
-    bool is_spinning_ = false;
+    double m_bridge_coeff = 1.8;
+    double m_bridge_coeff_spinning = 1.6;
 
-
-//    void resolve()
+    bool m_is_spinning = false;
 
     void setGlobalPath(Eigen::Vector3d velocity, std::vector<Eigen::Vector2d> &global_path, double reference_amax, double desire_speed, bool xtl);
 
@@ -202,16 +199,14 @@ public:
 
     void reset(const int &pieceNum);
     void init(std::shared_ptr<GlobalMap> &_global_map);
-    std::shared_ptr<GlobalMap> global_map_;  // 地图
+    
+    std::shared_ptr<GlobalMap> m_global_map;  // 地图
 
 private:
-    
     int N;
     Eigen::Matrix3d headPVA;
     Eigen::Matrix3d tailPVA;
     std::vector<Eigen::Vector2d> m_global_path;
-
-
 
 };
 

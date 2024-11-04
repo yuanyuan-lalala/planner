@@ -1,49 +1,30 @@
-#ifndef PLANNER_MANAGER_HPP
-#define PLANNER_MANAGER_HPP
-#include"ros/ros.h"
-#include"Eigen/Core"
-#include"Eigen/Dense"
-#include"random"
-#include "memory"
-#include"global_map.hpp"
-#include "path_smooth.hpp"
-#include "reference_path.hpp"
-#include"topo_searcher.hpp"
-#include"Astar_searcher.hpp"
-
-
-class PlannerManager{
-
-public:
-    void init(ros::NodeHandle& nh);
-    bool pathFinding(const Eigen::Vector3d start_pt, const Eigen::Vector3d target_pt,
-                     const Eigen::Vector3d start_vel);
-    bool replanFinding(const Eigen::Vector3d start_pt, const Eigen::Vector3d target_pt,
-                       const Eigen::Vector3d start_vel);
-    void pubGlobalPlanningResult(std::vector<Eigen::Vector3d> nodes);
-    bool AstarGlobalResult(const Eigen::Vector3d start_pt, const Eigen::Vector3d target_pt);
-
-    // enum class teamColor{
-    //     RED ,
-    //     BLUE ,
-    // };
-    // teamColor sentryColor;
-
-
-    typedef enum {
-        RED = 0,
+#pragma once
+#include"searcher/searcher_manager.hpp"
+#include"optimizer/optimizer_algorithm.hpp"
+#include "optimizer/optimizer_manager.hpp"
+#include "reference_optimizer/reference_optimizer.hpp"
+enum class teamColor{
+        RED,
         BLUE,
-    } teamColor;
-    teamColor sentryColor;
+};
+class PlannerManager
+{
+public:
 
-    std::unique_ptr<PlannerManager> m_plannerManager;
-    std::shared_ptr<GlobalMap> m_globalMap;
-    std::unique_ptr<Smoother> m_smoother;
-    std::unique_ptr<ReferenceSmooth> m_referenceSmooth;
-    std::unique_ptr<TopoSearcher> m_topoPRM;
-    std::unique_ptr<AstarPathFinder> m_astar_path_finder;
-   
-    // 参考路径的最大期望avw
+    
+    void initializeManager(ros::NodeHandle& m_nh,std::shared_ptr<GlobalMap> global_map);
+    
+    std::shared_ptr<GlobalMap> m_global_map;
+    std::shared_ptr<SearcherManager> m_searcher_manager;
+    std::shared_ptr<OptimizerManager> m_optimizer_manager;
+    std::shared_ptr<ReferenceOptimizer> m_reference_optimizer; 
+    
+    // 定义随机采样器
+    std::random_device m_rd;
+    std::default_random_engine m_eng;
+    std::uniform_real_distribution<double> m_rand_pos;
+
+    /// 参考路径的最大线avw
     double reference_v_max;
     double reference_a_max;
     double reference_w_max;
@@ -51,10 +32,7 @@ public:
     double reference_desire_speed_spinning;
 
     std::vector<std::vector<Eigen::Vector3d>> sample_path_set;
-    std::random_device m_rd;
-    std::default_random_engine m_eng;
-    std::uniform_real_distribution<double> m_rand_pos;
-    
+
     /// 小陀螺或者小虎步时的avw
     double reference_v_spinning_max;
     double reference_a_spinning_max;
@@ -75,9 +53,9 @@ public:
     double map_x_size;
     double map_y_size;
     double map_z_size;
-    Eigen::Vector3d map_lower_point;  // 地图的左上角和右下角
+    Eigen::Vector3d map_lower_point;  /// 地图的左上角和右下角
     Eigen::Vector3d map_upper_point;
-    double search_height_min;         // 局部点云可视范围
+    double search_height_min;         /*局部点云可视范围*/
     double search_height_max;
     double search_radius;
 
@@ -111,28 +89,40 @@ public:
     bool obstacle_swell_vis_flag;
 
     /*全局规划结果与局部规划结果*/
+    std::vector<Eigen::Vector3d> unoptimized_path;
     std::vector<Eigen::Vector3d> optimized_path;
-    std::vector<Eigen::Vector3d> local_optimize_path;
+   
+
+
     std::vector<Eigen::Vector3d> ref_trajectory;  // 可视化和重规划判断
     std::vector<Eigen::Vector3d> astar_path;
     std::vector<Eigen::Vector2d> final_path;
     std::vector<Eigen::Vector2d> final_path_temp;  // 临时可视化变量
-    // std::vector<GraphNode::Ptr> global_graph;
+    std::vector<GraphNode::Ptr> global_graph;
+
+    
+
+    /*决策相关变量*/
+    int decision_mode;
+    int enemy_num;           /*敌人数量*/
+    int sentry_HP;           /*烧饼血量*/
+    bool is_attacked;        /*是否被攻击*/
+    int countHP;             /*血量统计*/
+
+    double last_current_yaw;
+    
+    
+    teamColor sentryColor;
 
 
-
-
-private:
-
-
-
-
-
-
+    void init(ros::NodeHandle &nh,std::shared_ptr<GlobalMap> global_map);
+    std::vector<Eigen::Vector3d> localPathFinding(const Eigen::Vector3d start_pt, const Eigen::Vector3d target_pt);
+    bool pathFinding(const Eigen::Vector3d start_pt, const Eigen::Vector3d target_pt,
+                     const Eigen::Vector3d start_vel);
+    bool replanFinding(const Eigen::Vector3d start_pt, const Eigen::Vector3d target_pt,
+                       const Eigen::Vector3d start_vel);
+    void pubGlobalPlanningResult(std::vector<Eigen::Vector3d> nodes);
+    bool AstarGlobalResult(const Eigen::Vector3d start_pt, const Eigen::Vector3d target_pt);
 
 
 };
-
-
-
-#endif

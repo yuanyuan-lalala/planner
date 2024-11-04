@@ -4,8 +4,8 @@ project(planner)
 ## Compile as C++11, supported in ROS Kinetic and newer
 # add_compile_options(-std=c++11)
 set(CMAKE_CXX_STANDARD_REQUIRED 20)
-set(CMAKE_BUILD_TYPE "Release")
-# set(CMAKE_BUILD_TYPE Debug)
+# set(CMAKE_BUILD_TYPE "Release")
+set(CMAKE_BUILD_TYPE Debug)
 
 
 find_package(catkin REQUIRED COMPONENTS
@@ -47,6 +47,10 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include/trajectory_generation)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include/trajectory_tracking)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include/way_points_generator)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include/trajectory_generation/root_solver)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include/trajectory_generation/map)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include/trajectory_generation/optimizer)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include/trajectory_generation/visualizer)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include/trajectory_generation/searcher)
 include_directories(
     SYSTEM
     include

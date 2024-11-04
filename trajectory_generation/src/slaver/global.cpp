@@ -56,7 +56,6 @@ ros::Subscriber Global::sentry_location;
 
 Referee Global::referee;
 
-
 /**
  * 全局参数初始化
  */
